@@ -142,6 +142,8 @@ fn pack(input: glint.CommandInput, config: toml.Section) {
   let assert Ok(_) =
     copy(runtime <> "/bin/escript.exe", runtime <> "/bin/launch.exe")
 
+  kill_inis(runtime, erts_dir)
+
   apply_whitelists(runtime, erts_dir, config)
 
   clean_libs(runtime)
@@ -408,4 +410,9 @@ fn walk_directory(dir: String, for_each: fn(String, String) -> Bool) {
     }
   })
   Nil
+}
+
+fn kill_inis(runtime: String, erts_dir: String) {
+  let _ = file.delete(runtime <> "/bin/erl.ini")
+  let _ = file.delete(erts_dir <> "/bin/erl.ini")
 }
