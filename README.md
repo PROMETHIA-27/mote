@@ -8,14 +8,14 @@ A gleam executable bundler.
 - Create a folder somewhere containing at least one erlang runtime, and add it to the environment variable `GLEAM_MOTE_RUNTIMES`
   - Example runtime folder:
 ```
-erlang_runtimes
-- windows_x64
-  - bin
-  - erts-14.0.1
+erlang_runtimes/
+- windows_x64/
+  - bin/
+  - erts-14.0.1/
   - ...
-- linux_x64
-  - bin
-  - erts-14.0.1
+- linux_x64/
+  - bin/
+  - erts-14.0.1/
   - ...
 ```
   - Example envvar:
