@@ -142,7 +142,7 @@ fn pack(input: glint.CommandInput, config: toml.Section) {
   let assert Ok(_) =
     copy(runtime <> "/bin/escript.exe", runtime <> "/bin/launch.exe")
 
-  kill_inis(runtime, erts_dir)
+  let _ = kill_inis(runtime, erts_dir)
 
   apply_whitelists(runtime, erts_dir, config)
 
