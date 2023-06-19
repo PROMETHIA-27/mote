@@ -6,7 +6,6 @@ import gleam/erlang/os
 import gleam/result
 import gleam/list
 import gleam/string
-import mote/file as motefs
 import mote/toml
 import shellout
 import glint
@@ -14,14 +13,21 @@ import glint/flag
 
 pub fn main() {
     let config = get_project_config()
+
+    let target_default = case os.family() {
+        os.WindowsNt -> "windows-x64"
+        os.Darwin -> "macos-x64"
+        os.Linux -> "linux-x64"
+        _ -> "linux-x64"
+    }
     
     glint.new()
     |> glint.add_command(
         at: [],
         do: pack(_, config),
         with: [
-            flag.string("runtime", "foo", "Decide which runtime to pack with"), // TODO: Change foo to ""
-            flag.string("mode", "dev", "Decide which mode (`dev` or `prod`) to pack with")
+            flag.string("runtime", "", "Decide which runtime to pack with"),
+            flag.string("target", target_default, "Decide with target to pack for")
         ],
         described: "Packs your project into an executable"
     )
@@ -38,7 +44,6 @@ fn pack(input: glint.CommandInput, config: toml.Section) {
     io.println("mote packaging starting...")
 
     let assert Ok(flag.S(runtime)) = flag.get(input.flags, "runtime")
-    let assert Ok(flag.S(mode)) = flag.get(input.flags, "mode")
 
     case runtime {
         "" -> {
@@ -139,16 +144,26 @@ fn pack(input: glint.CommandInput, config: toml.Section) {
 
     apply_whitelists(runtime, erts_dir, config)
 
-    launch_warp(project_name, pkg_dir)
+    clean_libs(runtime)
+
+    let assert Ok(flag.S(target)) = flag.get(input.flags, "target")
+    case target {
+        "windows-x64" | "macos-x64" | "linux-x64" -> Nil
+        _ -> {
+            io.println_error("invalid target `" <> target <> "`")
+            panic
+        }
+    }
+    launch_warp(project_name, pkg_dir, target)
 
     io.println("mote packaging completed.")
 }
 
-fn launch_warp(project_name: String, pkg_dir: String) {
+fn launch_warp(project_name: String, pkg_dir: String, target: String) {
     case os.family() {
         os.WindowsNt -> case shellout.command(run: "warp-packer", with: [
                 "-a",
-                "windows-x64",
+                target,
                 "-i",
                 ".",
                 "-e",
@@ -164,7 +179,7 @@ fn launch_warp(project_name: String, pkg_dir: String) {
         }
         os.Darwin -> case shellout.command(run: "warp-packer", with: [
                 "-a",
-                "macos-x64",
+                target,
                 "-i",
                 ".",
                 "-e",
@@ -180,7 +195,7 @@ fn launch_warp(project_name: String, pkg_dir: String) {
         }
         _ -> case shellout.command(run: "warp-packer", with: [
                 "-a",
-                "linux-x64",
+                target,
                 "-i",
                 ".",
                 "-e",
@@ -305,4 +320,45 @@ fn apply_whitelists(runtime: String, erts_dir: String, config: toml.Section) {
         }
         _ -> io.println("no lib whitelist found, skipping")
     }
+}
+
+fn clean_libs(runtime: String) {
+    let lib_dir = runtime <> "/lib"
+
+    let blacklist = ["doc", "include", "src", "examples"]
+    walk_directory(lib_dir, fn(file, path) {
+        case list.contains(blacklist, file) {
+            True -> {
+                let assert Ok(Nil) = file.recursive_delete(path)
+                False
+            }
+            False -> True
+        }
+    })
+}
+
+fn walk_directory(dir: String, for_each: fn(String, String) -> Bool) {
+    dir
+    |> file.list_directory
+    |> result.unwrap([])
+    |> list.map(fn(file) {
+        let filepath = dir <> "/" <> file
+        case file.is_directory(filepath) {
+            Ok(True) -> {
+                case for_each(file, filepath) {
+                    True -> walk_directory(filepath, for_each)
+                    False -> Nil
+                }
+            }
+            Ok(False) -> {
+                for_each(file, filepath)
+                Nil
+            }
+            _ -> {
+                io.println_error("failed to walk file " <> file <> " at path " <> dir <> "/" <> file)
+                panic
+            }
+        }
+    })
+    Nil
 }
